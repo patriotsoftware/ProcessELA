@@ -148,7 +148,7 @@ func LoadFile(path string) (*os.File, error) {
     err		= os.Mkdir(tmppath, 0777)
     if err != nil {
       fmt.Printf("Temp folder failed to create (%s) (%s)\n", tmppath, err.Error())
-      return file, err
+//      return file, err
     }
 
     err		= GetFileS3(bucket, itempath, filename)

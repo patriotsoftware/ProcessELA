@@ -267,45 +267,6 @@ func extractImagesFromPDF(file *os.File) error {
   numPages, err := pdfReader.GetNumPages()
   if err != nil { return err }
 
-  trailerDict, err := pdfReader.GetTrailer()
-  if err != nil { fmt.Println("Couldn't read Metadata trailer. (%s)\n", err.Error())
-  } else {
-    if trailerDict == nil { fmt.Printf("Metadata trailer is empty\n")
-    } else {
-      var infoDict *pdfcore.PdfObjectDictionary
-      infoObj := trailerDict.Get("Info")
-      switch t := infoObj.(type) {
-        case *pdfcore.PdfObjectReference:
-          infoRef := t
-          infoObj, err = pdfReader.GetIndirectObjectByNumber(int(infoRef.ObjectNumber))
-          infoObj = pdfcore.TraceToDirectObject(infoObj)
-          if err != nil { fmt.Printf("Reading Metadata trailer failed (%s)\n", err.Error())
-          } else { infoDict, _ = infoObj.(*pdfcore.PdfObjectDictionary) }
-	case *pdfcore.PdfObjectDictionary:
-          infoDict = t
-      }
-
-      if infoDict == nil { fmt.Printf("Metadata dictionary not present\n")
-      } else {
-	di := pdfDocInfo{
-          Filename: filename,
-          NumPages: numPages,
-	}
-
-        if str, has := infoDict.Get("Title").(*pdfcore.PdfObjectString); has { di.Title = str.String() }
-        if str, has := infoDict.Get("Author").(*pdfcore.PdfObjectString); has { di.Author = str.String() }
-        if str, has := infoDict.Get("Keywords").(*pdfcore.PdfObjectString); has { di.Keywords = str.String() }
-        if str, has := infoDict.Get("Creator").(*pdfcore.PdfObjectString); has { di.Creator = str.String() }
-        if str, has := infoDict.Get("Producer").(*pdfcore.PdfObjectString); has { di.Producer = str.String() }
-        if str, has := infoDict.Get("CreationDate").(*pdfcore.PdfObjectString); has { di.CreationDate = str.String() }
-        if str, has := infoDict.Get("ModDate").(*pdfcore.PdfObjectString); has { di.ModDate = str.String() }
-        if name, has := infoDict.Get("Trapped").(*pdfcore.PdfObjectName); has { di.Trapped = name.String() }
-
-        di.print()
-      }
-    }
-  }
-
   fmt.Printf("PDF Num Pages: %d\n", numPages)
   basefilename	:= ""
   fileext	:= filepath.Ext(filename)
@@ -356,6 +317,46 @@ func extractImagesFromPDF(file *os.File) error {
     }
     page = nil
   }
+
+  trailerDict, err := pdfReader.GetTrailer()
+  if err != nil { fmt.Println("Couldn't read Metadata trailer. (%s)\n", err.Error())
+  } else {
+    if trailerDict == nil { fmt.Printf("Metadata trailer is empty\n")
+    } else {
+      var infoDict *pdfcore.PdfObjectDictionary
+      infoObj := trailerDict.Get("Info")
+      switch t := infoObj.(type) {
+        case *pdfcore.PdfObjectReference:
+          infoRef := t
+          infoObj, err = pdfReader.GetIndirectObjectByNumber(int(infoRef.ObjectNumber))
+          infoObj = pdfcore.TraceToDirectObject(infoObj)
+          if err != nil { fmt.Printf("Reading Metadata trailer failed (%s)\n", err.Error())
+          } else { infoDict, _ = infoObj.(*pdfcore.PdfObjectDictionary) }
+	case *pdfcore.PdfObjectDictionary:
+          infoDict = t
+      }
+
+      if infoDict == nil { fmt.Printf("Metadata dictionary not present\n")
+      } else {
+	di := pdfDocInfo{
+          Filename: filename,
+          NumPages: numPages,
+	}
+
+        if str, has := infoDict.Get("Title").(*pdfcore.PdfObjectString); has { di.Title = str.String() }
+        if str, has := infoDict.Get("Author").(*pdfcore.PdfObjectString); has { di.Author = str.String() }
+        if str, has := infoDict.Get("Keywords").(*pdfcore.PdfObjectString); has { di.Keywords = str.String() }
+        if str, has := infoDict.Get("Creator").(*pdfcore.PdfObjectString); has { di.Creator = str.String() }
+        if str, has := infoDict.Get("Producer").(*pdfcore.PdfObjectString); has { di.Producer = str.String() }
+        if str, has := infoDict.Get("CreationDate").(*pdfcore.PdfObjectString); has { di.CreationDate = str.String() }
+        if str, has := infoDict.Get("ModDate").(*pdfcore.PdfObjectString); has { di.ModDate = str.String() }
+        if name, has := infoDict.Get("Trapped").(*pdfcore.PdfObjectName); has { di.Trapped = name.String() }
+
+        di.print()
+      }
+    }
+  }
+
   rgbImages = nil
   pdfReader = nil
   return nil
@@ -586,29 +587,45 @@ func (di pdfDocInfo) print() {
   fmt.Printf("  CreationDate: %s\n", di.CreationDate)
   fmt.Printf("  ModDate: %s\n", di.ModDate)
   fmt.Printf("  Trapped: %s\n", di.Trapped)
+
+  chanceoffraud := "low"
+  switch {
+    case chanceoffraudscore > 0 && chanceoffraudscore <= 1:
+      chanceoffraud = "medium"
+    case chanceoffraudscore > 1 && chanceoffraudscore <= 2:
+      chanceoffraud = "high"
+    case chanceoffraudscore > 2 && chanceoffraudscore <= 3:
+      chanceoffraud = "very high"
+    case chanceoffraudscore > 3:
+      chanceoffraud = "very very high"
+  }
+
   var jsonbuff bytes.Buffer
-  jsonbuff.WriteString("{\"filename\":\"")
+  jsonbuff.WriteString("{\n  \"filename\":\"")
   jsonbuff.WriteString(di.Filename)
-  jsonbuff.WriteString("\",\"pages\":")
+  jsonbuff.WriteString("\",\n  \"pages\":")
   jsonbuff.WriteString(strconv.Itoa(di.NumPages))
-  jsonbuff.WriteString(",\"title\":\"")
+  jsonbuff.WriteString(",\n  \"title\":\"")
   jsonbuff.WriteString(di.Title)
-  jsonbuff.WriteString("\",\"author\":\"")
+  jsonbuff.WriteString("\",\n  \"author\":\"")
   jsonbuff.WriteString(di.Author)
-  jsonbuff.WriteString("\",\"subject\":\"")
+  jsonbuff.WriteString("\",\n  \"subject\":\"")
   jsonbuff.WriteString(di.Subject)
-  jsonbuff.WriteString("\",\"keywords\":\"")
+  jsonbuff.WriteString("\",\n  \"keywords\":\"")
   jsonbuff.WriteString(di.Keywords)
-  jsonbuff.WriteString("\"creator\":\"")
+  jsonbuff.WriteString("\",\n  \"creator\":\"")
   jsonbuff.WriteString(di.Creator)
-  jsonbuff.WriteString("\"producer\":\"")
+  jsonbuff.WriteString("\",\n  \"producer\":\"")
   jsonbuff.WriteString(di.Producer)
-  jsonbuff.WriteString("\"creationdate\":\"")
+  jsonbuff.WriteString("\",\n  \"creationdate\":\"")
   jsonbuff.WriteString(di.CreationDate)
-  jsonbuff.WriteString("\"moddate\":\"")
+  jsonbuff.WriteString("\",\n  \"moddate\":\"")
   jsonbuff.WriteString(di.ModDate)
-  jsonbuff.WriteString("\"trapped\":\"")
+  jsonbuff.WriteString("\",\n  \"trapped\":\"")
   jsonbuff.WriteString(di.Trapped)
+  jsonbuff.WriteString("\",\n  \"heckerscore\":\"")
+  jsonbuff.WriteString(chanceoffraud)
+  jsonbuff.WriteString("\"\n}")
 
   metafilename := ""
   fileext := filepath.Ext(di.Filename)
